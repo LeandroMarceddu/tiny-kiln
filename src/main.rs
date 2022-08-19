@@ -59,7 +59,8 @@ fn main() -> ! {
     let mut cs_pin = pins.gpio16.into_push_pull_output();
     let _spi_miso = pins.gpio12.into_mode::<hal::gpio::FunctionSpi>();
     let _spi_mosi = pins.gpio11.into_mode::<hal::gpio::FunctionSpi>();
-    let spi = hal::Spi::<_, _, 8>::new(pac.SPI0);
+
+    let spi = hal::Spi::<_, _, 8>::new(pac.SPI1);
     let mut spi = spi.init(
         &mut pac.RESETS,
         clocks.peripheral_clock.freq(),
