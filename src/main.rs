@@ -55,6 +55,10 @@ fn main() -> ! {
 
     let mut led_pin = pins.led.into_push_pull_output();
 
+    let _spi_sclk = pins.gpio10.into_mode::<hal::gpio::FunctionSpi>();
+    let mut cs_pin = pins.gpio16.into_push_pull_output();
+    let _spi_miso = pins.gpio12.into_mode::<hal::gpio::FunctionSpi>();
+    let _spi_mosi = pins.gpio11.into_mode::<hal::gpio::FunctionSpi>();
     let spi = hal::Spi::<_, _, 8>::new(pac.SPI0);
     let mut spi = spi.init(
         &mut pac.RESETS,
@@ -62,11 +66,6 @@ fn main() -> ! {
         16_000_000u32.Hz(),
         &embedded_hal::spi::MODE_0,
     );
-    let _spi_sclk = pins.gpio10.into_mode::<hal::gpio::FunctionSpi>();
-    let mut cs_pin = pins.gpio16.into_push_pull_output();
-    let _spi_miso = pins.gpio12.into_mode::<hal::gpio::FunctionSpi>();
-    let _spi_mosi = pins.gpio11.into_mode::<hal::gpio::FunctionSpi>();
-
     loop {
         led_pin.set_high().unwrap();
         delay.delay_ms(500);
