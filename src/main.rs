@@ -54,7 +54,7 @@ fn main() -> ! {
     let mut led_pin = pins.led.into_push_pull_output();
 
     let _spi_sclk = pins.gpio10.into_mode::<hal::gpio::FunctionSpi>();
-    let mut cs_pin = pins.gpio16.into_push_pull_output();
+    let mut cs_pin = pins.gpio13.into_push_pull_output();
     let _spi_miso = pins.gpio12.into_mode::<hal::gpio::FunctionSpi>();
     let _spi_mosi = pins.gpio11.into_mode::<hal::gpio::FunctionSpi>();
 
@@ -79,6 +79,7 @@ fn main() -> ! {
 
     // Check-loops
     let switch = pins.gpio17.into_pull_up_input();
+    //door switch in series with ^ switch via relay
     loop {
         if switch.is_high().unwrap() {
             info!("Switch NOK");
@@ -97,7 +98,7 @@ fn main() -> ! {
             cs_pin.set_high().unwrap();
             let raw = (buf[0] as u16) << 8 | (buf[1] as u16);
             let thermocouple = convert(bits_to_i16(raw.get_bits(THERMOCOUPLE_BITS), 14, 4, 2));
-            info!("term {}", thermocouple);
+            info!("temp {}", thermocouple);
 
             if thermocouple <= SETPOINT - 20.0 {
                 channel.set_duty(65535);
