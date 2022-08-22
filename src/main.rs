@@ -162,34 +162,33 @@ fn main() -> ! {
     let switch = pins.gpio17.into_pull_up_input();
     //door switch in series with ^ switch via relay
     loop {
+        cs_pin.set_low().unwrap();
+        let mut buf: [u8; 2] = [0, 0];
+        delay.delay_ms(10);
+        spi.transfer(&mut buf).unwrap();
+        cs_pin.set_high().unwrap();
+        let raw = (buf[0] as u16) << 8 | (buf[1] as u16);
+        let thermocouple = convert(bits_to_i16(raw.get_bits(THERMOCOUPLE_BITS), 14, 4, 2));
+        info!("temp {}", thermocouple);
+
+        command(
+            &mut i2c, 0x01_u8, // Clear display
+        );
+        let mut s: String<16> = String::new();
+        core::write!(s, "Temp: {}", thermocouple).unwrap();
+        for c in s.chars() {
+            write(&mut i2c, c as u8);
+        }
+
         if switch.is_high().unwrap() {
             info!("Switch NOK");
-            delay.delay_ms(100);
+            delay.delay_ms(200);
         } else {
             info!("Switch OK");
             led_pin.set_high().unwrap();
-            delay.delay_ms(500);
+            delay.delay_ms(200);
             led_pin.set_low().unwrap();
-            delay.delay_ms(500);
-
-            cs_pin.set_low().unwrap();
-            let mut buf: [u8; 2] = [0, 0];
-            delay.delay_ms(10);
-            spi.transfer(&mut buf).unwrap();
-            cs_pin.set_high().unwrap();
-            let raw = (buf[0] as u16) << 8 | (buf[1] as u16);
-            let thermocouple = convert(bits_to_i16(raw.get_bits(THERMOCOUPLE_BITS), 14, 4, 2));
-            info!("temp {}", thermocouple);
-
-            command(
-                &mut i2c, 0x01_u8, // Clear display
-            );
-            let mut s: String<16> = String::new();
-            core::write!(s, "Temp: {}", thermocouple).unwrap();
-            for c in s.chars() {
-                write(&mut i2c, c as u8);
-            }
-
+            delay.delay_ms(200);
             if thermocouple <= SETPOINT - 20.0 {
                 channel.set_duty(65535);
                 info!("full power");
