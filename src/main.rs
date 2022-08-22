@@ -24,42 +24,7 @@ use rp_pico as bsp;
 const THERMOCOUPLE_BITS: RangeInclusive<usize> = 2..=15;
 const SETPOINT: f32 = 1000.0;
 const LCD_ADDRESS: u8 = 0x3F;
-const EN: u8 = 0x04;
-const BACKLIGHT: u8 = 0x08;
 
-type Pins = hal::I2C<
-    rp2040_pac::I2C1,
-    (
-        hal::gpio::Pin<hal::gpio::bank0::Gpio6, hal::gpio::Function<hal::gpio::I2C>>,
-        hal::gpio::Pin<hal::gpio::bank0::Gpio7, hal::gpio::Function<hal::gpio::I2C>>,
-    ),
->;
-fn write4bits(i2c: &mut Pins, data: u8) {
-    i2c.write(LCD_ADDRESS, &[data | EN | BACKLIGHT]).unwrap();
-    delay_ms2(1);
-    i2c.write(LCD_ADDRESS, &[BACKLIGHT]).unwrap();
-    delay_ms2(5);
-}
-fn delay_ms2(ms: u32) {
-    let mut i = ms * 7_200;
-    while i > 0 {
-        i -= 1;
-    }
-}
-fn send(i2c: &mut Pins, data: u8, mode: u8) {
-    let high_bits: u8 = data & 0xf0;
-    let low_bits: u8 = (data << 4) & 0xf0;
-    write4bits(i2c, high_bits | mode);
-    write4bits(i2c, low_bits | mode);
-}
-
-fn write(i2c: &mut Pins, data: u8) {
-    send(i2c, data, 0x01);
-}
-
-fn command(i2c: &mut Pins, data: u8) {
-    send(i2c, data, 0x00);
-}
 #[entry]
 fn main() -> ! {
     info!("Program start");
@@ -80,7 +45,7 @@ fn main() -> ! {
     )
     .ok()
     .unwrap();
-
+    info!("Set up clocks");
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().integer());
 
     let pins = bsp::Pins::new(
@@ -90,6 +55,8 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
     //SPI-setup
+    info!("Set up SPI");
+
     let mut led_pin = pins.led.into_push_pull_output();
 
     let _spi_sclk = pins.gpio10.into_mode::<hal::gpio::FunctionSpi>();
@@ -105,6 +72,7 @@ fn main() -> ! {
         &embedded_hal::spi::MODE_0,
     );
     //PWM-setup
+    info!("Set up PWM");
     let mut pwm_slices = hal::pwm::Slices::new(pac.PWM, &mut pac.RESETS);
 
     // Configure PWM4
@@ -115,7 +83,7 @@ fn main() -> ! {
     // Output channel A on PWM7 to GPIO 14
     let channel = &mut pwm.channel_a;
     channel.output_to(pins.gpio14);
-
+    info!("Set up I2C");
     //set up I2C for the LCD to display temps
     let sda_pin = pins.gpio6.into_mode::<hal::gpio::FunctionI2C>();
     let scl_pin = pins.gpio7.into_mode::<hal::gpio::FunctionI2C>();
@@ -127,37 +95,8 @@ fn main() -> ! {
         &mut pac.RESETS,
         clocks.peripheral_clock.freq(),
     );
-    write4bits(&mut i2c, 0x03 << 4);
-    delay.delay_ms(5);
-    write4bits(&mut i2c, 0x03 << 4);
-    delay.delay_ms(5);
-    write4bits(&mut i2c, 0x03 << 4);
-    delay.delay_ms(5);
-    write4bits(&mut i2c, 0x02 << 4);
-    command(
-        &mut i2c,
-        0x20_u8 | // 5x8 display
-        0x08_u8, // Two line display
-    );
 
-    command(
-        &mut i2c,
-        0x08_u8 | // Display control command
-        0x04_u8 | // Display on
-        0x02_u8 | // Cursor on
-        0x01_u8, // Blink on
-    );
-
-    command(
-        &mut i2c, 0x01_u8, // Clear display
-    );
-
-    command(
-        &mut i2c,
-        0x04_u8 | // Entry mode command
-        0x02_u8, // Entry right
-    );
-
+    info!("Setting up check-loops");
     // Check-loops
     let switch = pins.gpio17.into_pull_up_input();
     //door switch in series with ^ switch via relay
@@ -170,15 +109,8 @@ fn main() -> ! {
         let raw = (buf[0] as u16) << 8 | (buf[1] as u16);
         let thermocouple = convert(bits_to_i16(raw.get_bits(THERMOCOUPLE_BITS), 14, 4, 2));
         info!("temp {}", thermocouple);
-
-        command(
-            &mut i2c, 0x01_u8, // Clear display
-        );
-        let mut s: String<16> = String::new();
-        core::write!(s, "Temp: {}", thermocouple).unwrap();
-        for c in s.chars() {
-            write(&mut i2c, c as u8);
-        }
+        /*let mut s: String<16> = String::new();
+        core::write!(s, "Temp: {}", thermocouple).unwrap();*/
 
         if switch.is_high().unwrap() {
             info!("Switch NOK");
