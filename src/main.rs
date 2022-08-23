@@ -6,9 +6,10 @@ use bsp::entry;
 use bsp::hal::{clocks::init_clocks_and_plls, pac, sio::Sio, watchdog::Watchdog};
 use core::fmt::Write;
 use core::ops::RangeInclusive;
-use cortex_m::prelude::{_embedded_hal_blocking_i2c_Write, _embedded_hal_blocking_spi_Transfer};
+use cortex_m::prelude::{_embedded_hal_blocking_spi_Transfer};
 use defmt::*;
 use defmt_rtt as _;
+use embedded_graphics::primitives::{PrimitiveStyleBuilder, StrokeAlignment};
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_hal::PwmPin;
 use embedded_time::fixed_point::FixedPoint;
@@ -21,9 +22,16 @@ use rp2040_hal::clocks::Clock;
 
 use rp_pico as bsp;
 
+use embedded_graphics::{
+    mono_font::{ascii::FONT_10X20, MonoTextStyleBuilder},
+    pixelcolor::BinaryColor,
+    prelude::*,
+    text::{Baseline, Text},
+};
+use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
+
 const THERMOCOUPLE_BITS: RangeInclusive<usize> = 2..=15;
 const SETPOINT: f32 = 1000.0;
-const LCD_ADDRESS: u8 = 0x3F;
 
 #[entry]
 fn main() -> ! {
@@ -87,7 +95,7 @@ fn main() -> ! {
     //set up I2C for the LCD to display temps
     let sda_pin = pins.gpio6.into_mode::<hal::gpio::FunctionI2C>();
     let scl_pin = pins.gpio7.into_mode::<hal::gpio::FunctionI2C>();
-    let mut i2c = hal::I2C::i2c1(
+    let i2c = hal::I2C::i2c1(
         pac.I2C1,
         sda_pin,
         scl_pin, // Try `not_an_scl_pin` here
@@ -95,6 +103,28 @@ fn main() -> ! {
         &mut pac.RESETS,
         clocks.peripheral_clock.freq(),
     );
+    let interface = I2CDisplayInterface::new(i2c);
+    let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
+        .into_buffered_graphics_mode();
+    display.init().unwrap();
+    let text_style = MonoTextStyleBuilder::new()
+        .font(&FONT_10X20)
+        .text_color(BinaryColor::On)
+        .build();
+    Text::with_baseline("TinyKiln!", Point::new(5, 5), text_style, Baseline::Top)
+        .draw(&mut display)
+        .unwrap();
+    let border_stroke = PrimitiveStyleBuilder::new()
+        .stroke_color(BinaryColor::On)
+        .stroke_width(3)
+        .stroke_alignment(StrokeAlignment::Inside)
+        .build();
+    display
+        .bounding_box()
+        .into_styled(border_stroke)
+        .draw(&mut display)
+        .unwrap();
+    display.flush().unwrap();
 
     info!("Setting up check-loops");
     // Check-loops
@@ -109,8 +139,19 @@ fn main() -> ! {
         let raw = (buf[0] as u16) << 8 | (buf[1] as u16);
         let thermocouple = convert(bits_to_i16(raw.get_bits(THERMOCOUPLE_BITS), 14, 4, 2));
         info!("temp {}", thermocouple);
-        /*let mut s: String<16> = String::new();
-        core::write!(s, "Temp: {}", thermocouple).unwrap();*/
+        let mut s: String<16> = String::new();
+        core::write!(s, "Temperatuur:\n{}", thermocouple).unwrap();
+        display.clear();
+        display
+            .bounding_box()
+            .into_styled(border_stroke)
+            .draw(&mut display)
+            .unwrap();
+
+        Text::with_baseline(&s, Point::new(5, 5), text_style, Baseline::Top)
+            .draw(&mut display)
+            .unwrap();
+        display.flush().unwrap();
 
         if switch.is_high().unwrap() {
             info!("Switch NOK");
