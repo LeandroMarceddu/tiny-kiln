@@ -6,14 +6,14 @@ use bsp::entry;
 use bsp::hal::{clocks::init_clocks_and_plls, pac, sio::Sio, watchdog::Watchdog};
 use core::fmt::Write;
 use core::ops::RangeInclusive;
-use cortex_m::prelude::{_embedded_hal_blocking_spi_Transfer};
+use cortex_m::prelude::_embedded_hal_blocking_spi_Transfer;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_graphics::primitives::{PrimitiveStyleBuilder, StrokeAlignment};
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_hal::PwmPin;
 use embedded_time::fixed_point::FixedPoint;
-use embedded_time::rate::Extensions;
+use embedded_time::{duration::*, rate::*};
 use heapless::String;
 
 use panic_probe as _;
@@ -23,15 +23,14 @@ use rp2040_hal::clocks::Clock;
 use rp_pico as bsp;
 
 use embedded_graphics::{
-    mono_font::{ascii::FONT_10X20, MonoTextStyleBuilder},
+    mono_font::{ascii::FONT_9X15, MonoTextStyleBuilder},
     pixelcolor::BinaryColor,
     prelude::*,
     text::{Baseline, Text},
 };
+use hal::timer::Alarm;
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
-
 const THERMOCOUPLE_BITS: RangeInclusive<usize> = 2..=15;
-const SETPOINT: f32 = 1000.0;
 
 #[entry]
 fn main() -> ! {
@@ -99,7 +98,7 @@ fn main() -> ! {
         pac.I2C1,
         sda_pin,
         scl_pin, // Try `not_an_scl_pin` here
-        400.kHz(),
+        400_u32.kHz(),
         &mut pac.RESETS,
         clocks.peripheral_clock.freq(),
     );
@@ -108,7 +107,7 @@ fn main() -> ! {
         .into_buffered_graphics_mode();
     display.init().unwrap();
     let text_style = MonoTextStyleBuilder::new()
-        .font(&FONT_10X20)
+        .font(&FONT_9X15)
         .text_color(BinaryColor::On)
         .build();
     Text::with_baseline("TinyKiln!", Point::new(5, 5), text_style, Baseline::Top)
@@ -126,10 +125,20 @@ fn main() -> ! {
         .unwrap();
     display.flush().unwrap();
 
+    info!("Starting up timers");
+    let mut timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS);
+    let mut alarm = timer.alarm_0().unwrap();
+
     info!("Setting up check-loops");
-    // Check-loops
     let switch = pins.gpio17.into_pull_up_input();
     //door switch in series with ^ switch via relay
+    let mut program_active: bool = false;
+    let mut step: u8 = 1;
+    let mut setpoint: f32 = 0.0;
+    let mut setpoint_reached: bool = false;
+    let mut alarm_started: bool = false;
+    let mut cooldown: bool = false;
+
     loop {
         cs_pin.set_low().unwrap();
         let mut buf: [u8; 2] = [0, 0];
@@ -140,7 +149,132 @@ fn main() -> ! {
         let thermocouple = convert(bits_to_i16(raw.get_bits(THERMOCOUPLE_BITS), 14, 4, 2));
         info!("temp {}", thermocouple);
         let mut s: String<16> = String::new();
-        core::write!(s, "Temperatuur:\n{}", thermocouple).unwrap();
+
+        if switch.is_high().unwrap() {
+            info!("Switch NOK");
+            step = 0;
+            program_active = false;
+            delay.delay_ms(200);
+            core::write!(s, "Temp: {}\nSetpt: {}\nSwitch NOK", thermocouple, setpoint).unwrap();
+        } else {
+            if !cooldown {
+                program_active = true;
+            } else {
+                program_active = false;
+                core::write!(
+                    s,
+                    "Cooldown\nTemp: {}\nSetpt: {}\nNo power",
+                    thermocouple,
+                    setpoint
+                )
+                .unwrap();
+            }
+
+            if program_active {
+                info!("Switch OK");
+                match step {
+                    1..=5 => {
+                        info!("Step {}", step);
+                        setpoint = 20.0 + (20.0 * (step as f32));
+                        if setpoint_reached {
+                            // set alarm and unset reached
+                            let _ = alarm.schedule(3600000000_u32.microseconds());
+                            alarm_started = true;
+                        }
+                        if alarm.finished() && alarm_started {
+                            step += 1;
+                            setpoint_reached = false;
+                        }
+                    }
+                    6 => {
+                        info!("Step {}", step);
+                        setpoint = 150.0;
+                        if setpoint_reached {
+                            // set alarm and unset reached
+                            let _ = alarm.schedule(3600000000_u32.microseconds());
+                            alarm_started = true;
+                        }
+                        if alarm.finished() && alarm_started {
+                            step += 1;
+                            setpoint_reached = false;
+                        }
+                    }
+                    7..=17 => {
+                        info!("Step {}", step);
+                        setpoint = 150.0 + (50.0 * ((step - 6) as f32));
+                        if setpoint_reached {
+                            // set alarm and unset reached
+                            let _ = alarm.schedule(1800000000_u32.microseconds());
+                            alarm_started = true;
+                        }
+                        if alarm.finished() && alarm_started {
+                            step += 1;
+                            setpoint_reached = false;
+                        }
+                    }
+                    18..=20 => {
+                        info!("Step {}", step);
+                        setpoint = 700.0 + (100.0 * ((step - 17) as f32));
+                        if setpoint_reached {
+                            // set alarm and unset reached
+                            let _ = alarm.schedule(1800000000_u32.microseconds());
+                            alarm_started = true;
+                        }
+                        if alarm.finished() && alarm_started {
+                            step += 1;
+                            setpoint_reached = false;
+                        }
+                    }
+                    21 => {
+                        info!("cooldown");
+                        cooldown = true;
+                        setpoint = 0.0;
+                    }
+                    0_u8 | 22_u8..=u8::MAX => info!("error"),
+                }
+                led_pin.set_high().unwrap();
+                delay.delay_ms(200);
+                led_pin.set_low().unwrap();
+                delay.delay_ms(200);
+                if thermocouple <= setpoint - 20.0 {
+                    channel.set_duty(65535);
+                    info!("full power");
+                    core::write!(
+                        s,
+                        "Step: {}\nTemp: {}\nSetpt: {}\nFull power",
+                        step,
+                        thermocouple,
+                        setpoint
+                    )
+                    .unwrap();
+                }
+                if (setpoint - 20.0..setpoint).contains(&thermocouple) {
+                    channel.set_duty(32767);
+                    info!("half power");
+                    core::write!(
+                        s,
+                        "Step: {}\nTemp: {}\nSetpt: {}\nHalf power",
+                        step,
+                        thermocouple,
+                        setpoint
+                    )
+                    .unwrap();
+                }
+                if thermocouple >= setpoint {
+                    channel.set_duty(0);
+                    info!("no power");
+                    core::write!(
+                        s,
+                        "Step: {}\nTemp: {}\nSetpt: {}\nNo power",
+                        step,
+                        thermocouple,
+                        setpoint
+                    )
+                    .unwrap();
+                    setpoint_reached = true;
+                }
+            }
+        }
         display.clear();
         display
             .bounding_box()
@@ -152,29 +286,6 @@ fn main() -> ! {
             .draw(&mut display)
             .unwrap();
         display.flush().unwrap();
-
-        if switch.is_high().unwrap() {
-            info!("Switch NOK");
-            delay.delay_ms(200);
-        } else {
-            info!("Switch OK");
-            led_pin.set_high().unwrap();
-            delay.delay_ms(200);
-            led_pin.set_low().unwrap();
-            delay.delay_ms(200);
-            if thermocouple <= SETPOINT - 20.0 {
-                channel.set_duty(65535);
-                info!("full power");
-            }
-            if (SETPOINT - 20.0..SETPOINT).contains(&thermocouple) {
-                channel.set_duty(32767);
-                info!("half power");
-            }
-            if thermocouple >= SETPOINT {
-                channel.set_duty(0);
-                info!("no power");
-            }
-        }
     }
 }
 fn bits_to_i16(bits: u16, len: usize, divisor: i16, shift: usize) -> i16 {
