@@ -156,6 +156,7 @@ fn main() -> ! {
             program_active = false;
             delay.delay_ms(200);
             core::write!(s, "Temp: {}\nSetpt: {}\nSwitch NOK", thermocouple, setpoint).unwrap();
+            channel.set_duty(0);
         } else {
             if !cooldown {
                 program_active = true;
@@ -236,47 +237,47 @@ fn main() -> ! {
                     }
                     0_u8 | 22_u8..=u8::MAX => info!("error"),
                 }
-                led_pin.set_high().unwrap();
-                delay.delay_ms(200);
-                led_pin.set_low().unwrap();
-                delay.delay_ms(200);
-                if thermocouple <= setpoint - 20.0 {
-                    channel.set_duty(65535);
-                    info!("full power");
-                    core::write!(
-                        s,
-                        "Step: {}\nTemp: {}\nSetpt: {}\nFull power",
-                        step,
-                        thermocouple,
-                        setpoint
-                    )
-                    .unwrap();
-                }
-                if (setpoint - 20.0..setpoint).contains(&thermocouple) {
-                    channel.set_duty(32767);
-                    info!("half power");
-                    core::write!(
-                        s,
-                        "Step: {}\nTemp: {}\nSetpt: {}\nHalf power",
-                        step,
-                        thermocouple,
-                        setpoint
-                    )
-                    .unwrap();
-                }
-                if thermocouple >= setpoint {
-                    channel.set_duty(0);
-                    info!("no power");
-                    core::write!(
-                        s,
-                        "Step: {}\nTemp: {}\nSetpt: {}\nNo power",
-                        step,
-                        thermocouple,
-                        setpoint
-                    )
-                    .unwrap();
-                    setpoint_reached = true;
-                }
+            }
+            led_pin.set_high().unwrap();
+            delay.delay_ms(200);
+            led_pin.set_low().unwrap();
+            delay.delay_ms(200);
+            if thermocouple <= setpoint - 20.0 {
+                channel.set_duty(65535);
+                info!("full power");
+                core::write!(
+                    s,
+                    "Step: {}\nTemp: {}\nSetpt: {}\nFull power",
+                    step,
+                    thermocouple,
+                    setpoint
+                )
+                .unwrap();
+            }
+            if (setpoint - 20.0..setpoint).contains(&thermocouple) {
+                channel.set_duty(32767);
+                info!("half power");
+                core::write!(
+                    s,
+                    "Step: {}\nTemp: {}\nSetpt: {}\nHalf power",
+                    step,
+                    thermocouple,
+                    setpoint
+                )
+                .unwrap();
+            }
+            if thermocouple >= setpoint {
+                channel.set_duty(0);
+                info!("no power");
+                core::write!(
+                    s,
+                    "Step: {}\nTemp: {}\nSetpt: {}\nNo power",
+                    step,
+                    thermocouple,
+                    setpoint
+                )
+                .unwrap();
+                setpoint_reached = true;
             }
         }
         display.clear();
