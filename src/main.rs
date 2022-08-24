@@ -176,7 +176,7 @@ fn main() -> ! {
                     1..=5 => {
                         info!("Step {}", step);
                         setpoint = 20.0 + (20.0 * (step as f32));
-                        if setpoint_reached {
+                        if setpoint_reached && !alarm_started {
                             // set alarm and unset reached
                             let _ = alarm.schedule(3600000000_u32.microseconds());
                             alarm_started = true;
@@ -184,12 +184,13 @@ fn main() -> ! {
                         if alarm.finished() && alarm_started {
                             step += 1;
                             setpoint_reached = false;
+                            alarm_started = false;
                         }
                     }
                     6 => {
                         info!("Step {}", step);
                         setpoint = 150.0;
-                        if setpoint_reached {
+                        if setpoint_reached && !alarm_started {
                             // set alarm and unset reached
                             let _ = alarm.schedule(3600000000_u32.microseconds());
                             alarm_started = true;
@@ -197,12 +198,13 @@ fn main() -> ! {
                         if alarm.finished() && alarm_started {
                             step += 1;
                             setpoint_reached = false;
+                            alarm_started = false;
                         }
                     }
                     7..=17 => {
                         info!("Step {}", step);
                         setpoint = 150.0 + (50.0 * ((step - 6) as f32));
-                        if setpoint_reached {
+                        if setpoint_reached && !alarm_started {
                             // set alarm and unset reached
                             let _ = alarm.schedule(1800000000_u32.microseconds());
                             alarm_started = true;
@@ -210,12 +212,13 @@ fn main() -> ! {
                         if alarm.finished() && alarm_started {
                             step += 1;
                             setpoint_reached = false;
+                            alarm_started = false;
                         }
                     }
                     18..=20 => {
                         info!("Step {}", step);
                         setpoint = 700.0 + (100.0 * ((step - 17) as f32));
-                        if setpoint_reached {
+                        if setpoint_reached && !alarm_started {
                             // set alarm and unset reached
                             let _ = alarm.schedule(1800000000_u32.microseconds());
                             alarm_started = true;
@@ -223,6 +226,7 @@ fn main() -> ! {
                         if alarm.finished() && alarm_started {
                             step += 1;
                             setpoint_reached = false;
+                            alarm_started = false;
                         }
                     }
                     21 => {
