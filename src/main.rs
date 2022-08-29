@@ -186,6 +186,7 @@ fn main() -> ! {
                             step += 1;
                             setpoint_reached = false;
                             alarm_started = false;
+                            continue;
                         }
                     }
                     6 => {
@@ -200,6 +201,7 @@ fn main() -> ! {
                             step += 1;
                             setpoint_reached = false;
                             alarm_started = false;
+                            continue;
                         }
                     }
                     7..=17 => {
@@ -214,6 +216,7 @@ fn main() -> ! {
                             step += 1;
                             setpoint_reached = false;
                             alarm_started = false;
+                            continue;
                         }
                     }
                     18..=20 => {
@@ -228,6 +231,7 @@ fn main() -> ! {
                             step += 1;
                             setpoint_reached = false;
                             alarm_started = false;
+                            continue;
                         }
                     }
                     21 => {
@@ -242,7 +246,7 @@ fn main() -> ! {
             delay.delay_ms(200);
             led_pin.set_low().unwrap();
             delay.delay_ms(200);
-            if thermocouple <= setpoint - 20.0 {
+            if thermocouple <= setpoint - 1.0 {
                 channel.set_duty(65535);
                 info!("full power");
                 core::write!(
@@ -254,7 +258,7 @@ fn main() -> ! {
                 )
                 .unwrap();
             }
-            if (setpoint - 20.0..setpoint).contains(&thermocouple) {
+            if (setpoint - 1.0..setpoint).contains(&thermocouple) {
                 channel.set_duty(32767);
                 info!("half power");
                 core::write!(

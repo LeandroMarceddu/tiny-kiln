@@ -14,7 +14,7 @@ defmt-rtt = "0.3"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 rp-pico = "0.4"
-rp2040-hal = "0.5.0"
+rp2040-hal = "0.6.0"
 rp2040-pac = "0.3.0"
 bit_field = "0.10.0"
 ssd1306 = "0.7.1"
