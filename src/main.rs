@@ -4,7 +4,6 @@
 use bit_field::BitField;
 use bsp::entry;
 use bsp::hal::{clocks::init_clocks_and_plls, pac, sio::Sio, watchdog::Watchdog};
-use core::fmt::Write;
 use core::ops::RangeInclusive;
 use cortex_m::prelude::_embedded_hal_blocking_spi_Transfer;
 use defmt::*;
@@ -23,7 +22,7 @@ use rp2040_hal::clocks::Clock;
 use rp_pico as bsp;
 
 use embedded_graphics::{
-    mono_font::{ascii::FONT_9X15, MonoTextStyleBuilder},
+    mono_font::{ascii::FONT_7X13, MonoTextStyleBuilder},
     pixelcolor::BinaryColor,
     prelude::*,
     text::{Baseline, Text},
@@ -31,7 +30,7 @@ use embedded_graphics::{
 use hal::timer::Alarm;
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 const THERMOCOUPLE_BITS: RangeInclusive<usize> = 2..=15;
-
+use core::fmt::Write;
 #[entry]
 fn main() -> ! {
     info!("Program start");
@@ -107,10 +106,10 @@ fn main() -> ! {
         .into_buffered_graphics_mode();
     display.init().unwrap();
     let text_style = MonoTextStyleBuilder::new()
-        .font(&FONT_9X15)
+        .font(&FONT_7X13)
         .text_color(BinaryColor::On)
         .build();
-    Text::with_baseline("TinyKiln!", Point::new(5, 5), text_style, Baseline::Top)
+    Text::with_baseline("TinyKiln!", Point::new(6, 5), text_style, Baseline::Top)
         .draw(&mut display)
         .unwrap();
     let border_stroke = PrimitiveStyleBuilder::new()
@@ -133,7 +132,7 @@ fn main() -> ! {
     let switch = pins.gpio17.into_pull_up_input();
     //door switch in series with ^ switch via relay
     let mut program_active: bool = false;
-    let mut step: u8 = 1;
+    let mut step: u8 = 3;
     let mut setpoint: f32 = 0.0;
     let mut setpoint_reached: bool = false;
     let mut alarm_started: bool = false;
@@ -148,26 +147,29 @@ fn main() -> ! {
         let raw = (buf[0] as u16) << 8 | (buf[1] as u16);
         let thermocouple = convert(bits_to_i16(raw.get_bits(THERMOCOUPLE_BITS), 14, 4, 2));
         info!("temp {}", thermocouple);
-        let mut s: String<16> = String::new();
+        let mut s: String<64> = String::new();
 
         if switch.is_high().unwrap() {
             info!("Switch NOK");
-            step = 0;
+            step = 3;
             program_active = false;
             delay.delay_ms(200);
-            core::write!(s, "Temp: {}\nSetpt: {}\nSwitch NOK", thermocouple, setpoint).unwrap();
+            s.write_fmt(format_args!(
+                "Temp: {}\nSetpt: {}\nSwitch NOK",
+                thermocouple, setpoint
+            ))
+            .unwrap();
+
             channel.set_duty(0);
         } else {
             if !cooldown {
                 program_active = true;
             } else {
                 program_active = false;
-                core::write!(
-                    s,
+                s.write_fmt(format_args!(
                     "Cooldown\nTemp: {}\nSetpt: {}\nNo power",
-                    thermocouple,
-                    setpoint
-                )
+                    thermocouple, setpoint
+                ))
                 .unwrap();
             }
 
@@ -249,37 +251,28 @@ fn main() -> ! {
             if thermocouple <= setpoint - 1.0 {
                 channel.set_duty(65535);
                 info!("full power");
-                core::write!(
-                    s,
+                s.write_fmt(format_args!(
                     "Step: {}\nTemp: {}\nSetpt: {}\nFull power",
-                    step,
-                    thermocouple,
-                    setpoint
-                )
+                    step, thermocouple, setpoint
+                ))
                 .unwrap();
             }
             if (setpoint - 1.0..setpoint).contains(&thermocouple) {
                 channel.set_duty(32767);
                 info!("half power");
-                core::write!(
-                    s,
+                s.write_fmt(format_args!(
                     "Step: {}\nTemp: {}\nSetpt: {}\nHalf power",
-                    step,
-                    thermocouple,
-                    setpoint
-                )
+                    step, thermocouple, setpoint
+                ))
                 .unwrap();
             }
             if thermocouple >= setpoint {
                 channel.set_duty(0);
                 info!("no power");
-                core::write!(
-                    s,
+                s.write_fmt(format_args!(
                     "Step: {}\nTemp: {}\nSetpt: {}\nNo power",
-                    step,
-                    thermocouple,
-                    setpoint
-                )
+                    step, thermocouple, setpoint
+                ))
                 .unwrap();
                 setpoint_reached = true;
             }
