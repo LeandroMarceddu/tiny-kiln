@@ -132,7 +132,7 @@ fn main() -> ! {
     let switch = pins.gpio17.into_pull_up_input();
     //door switch in series with ^ switch via relay
     let mut program_active: bool = false;
-    let mut step: u8 = 3;
+    let mut step: u8 = 6;
     let mut setpoint: f32 = 0.0;
     let mut setpoint_reached: bool = false;
     let mut alarm_started: bool = false;
@@ -147,11 +147,11 @@ fn main() -> ! {
         let raw = (buf[0] as u16) << 8 | (buf[1] as u16);
         let thermocouple = convert(bits_to_i16(raw.get_bits(THERMOCOUPLE_BITS), 14, 4, 2));
         info!("temp {}", thermocouple);
-        let mut s: String<64> = String::new();
+        let mut s: String<128> = String::new();
 
         if switch.is_high().unwrap() {
             info!("Switch NOK");
-            step = 3;
+            step = 6;
             program_active = false;
             delay.delay_ms(200);
             s.write_fmt(format_args!(
@@ -180,8 +180,7 @@ fn main() -> ! {
                         info!("Step {}", step);
                         setpoint = 20.0 + (20.0 * (step as f32));
                         if setpoint_reached && !alarm_started {
-                            // set alarm and unset reached
-                            let _ = alarm.schedule(3600000000_u32.microseconds());
+                            let _ = alarm.schedule(60000000_u32.microseconds());
                             alarm_started = true;
                         }
                         if alarm.finished() && alarm_started {
@@ -190,12 +189,17 @@ fn main() -> ! {
                             alarm_started = false;
                             continue;
                         }
+                        info!(
+                            "Started {} reached {} finished {}",
+                            alarm_started,
+                            setpoint_reached,
+                            alarm.finished()
+                        );
                     }
                     6 => {
                         info!("Step {}", step);
                         setpoint = 150.0;
                         if setpoint_reached && !alarm_started {
-                            // set alarm and unset reached
                             let _ = alarm.schedule(3600000000_u32.microseconds());
                             alarm_started = true;
                         }
@@ -210,7 +214,6 @@ fn main() -> ! {
                         info!("Step {}", step);
                         setpoint = 150.0 + (50.0 * ((step - 6) as f32));
                         if setpoint_reached && !alarm_started {
-                            // set alarm and unset reached
                             let _ = alarm.schedule(1800000000_u32.microseconds());
                             alarm_started = true;
                         }
@@ -225,7 +228,6 @@ fn main() -> ! {
                         info!("Step {}", step);
                         setpoint = 700.0 + (100.0 * ((step - 17) as f32));
                         if setpoint_reached && !alarm_started {
-                            // set alarm and unset reached
                             let _ = alarm.schedule(1800000000_u32.microseconds());
                             alarm_started = true;
                         }
