@@ -356,7 +356,7 @@ fn main() -> ! {
                         cooldown = true;
                         setpoint = 0.0;
                     }
-                    0_u8 | 7_u8..=u8::MAX => info!("error"),
+                    0_u8 | 8_u8..=u8::MAX => info!("error"),
                 }
             }
             led_pin.set_high().unwrap();
