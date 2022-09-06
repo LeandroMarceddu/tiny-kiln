@@ -12,7 +12,7 @@ use embedded_graphics::primitives::{PrimitiveStyleBuilder, StrokeAlignment};
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_hal::PwmPin;
 use embedded_time::fixed_point::FixedPoint;
-use embedded_time::{duration::*, rate::*};
+use embedded_time::rate::*;
 use heapless::String;
 
 use panic_probe as _;
@@ -27,7 +27,6 @@ use embedded_graphics::{
     prelude::*,
     text::{Baseline, Text},
 };
-use hal::timer::Alarm;
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 const THERMOCOUPLE_BITS: RangeInclusive<usize> = 2..=15;
 use core::fmt::Write;
@@ -125,8 +124,7 @@ fn main() -> ! {
     display.flush().unwrap();
 
     info!("Starting up timers");
-    let mut timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS);
-    let mut alarm = timer.alarm_0().unwrap();
+    let timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS);
 
     info!("Setting up check-loops");
     let switch = pins.gpio17.into_pull_up_input();
@@ -137,6 +135,7 @@ fn main() -> ! {
     let mut setpoint_reached: bool = false;
     let mut alarm_started: bool = false;
     let mut cooldown: bool = false;
+    let mut next_stop: u64 = 0;
 
     loop {
         cs_pin.set_low().unwrap();
@@ -175,68 +174,90 @@ fn main() -> ! {
 
             if program_active {
                 info!("Switch OK");
-                match step {
+                /*match step {
                     1..=5 => {
                         info!("Step {}", step);
                         setpoint = 20.0 + (20.0 * (step as f32));
                         if setpoint_reached && !alarm_started {
-                            let _ = alarm.schedule(60000000_u32.microseconds());
+                            next_stop = timer.get_counter() + 3600000000;
                             alarm_started = true;
                         }
-                        if alarm.finished() && alarm_started {
+                        if (next_stop <= timer.get_counter()) && alarm_started {
                             step += 1;
                             setpoint_reached = false;
                             alarm_started = false;
+                            next_stop = 0;
                             continue;
                         }
                         info!(
-                            "Started {} reached {} finished {}",
+                            "Started {} reached {} time left (ms) {}",
                             alarm_started,
                             setpoint_reached,
-                            alarm.finished()
+                            next_stop - timer.get_counter()
                         );
                     }
                     6 => {
                         info!("Step {}", step);
                         setpoint = 150.0;
                         if setpoint_reached && !alarm_started {
-                            let _ = alarm.schedule(3600000000_u32.microseconds());
+                            next_stop = timer.get_counter() + 3600000000;
                             alarm_started = true;
                         }
-                        if alarm.finished() && alarm_started {
+                        if (next_stop <= timer.get_counter()) && alarm_started {
                             step += 1;
                             setpoint_reached = false;
                             alarm_started = false;
+                            next_stop = 0;
                             continue;
                         }
+                        info!(
+                            "Started {} reached {} time left (ms) {}",
+                            alarm_started,
+                            setpoint_reached,
+                            next_stop - timer.get_counter()
+                        );
                     }
                     7..=17 => {
                         info!("Step {}", step);
                         setpoint = 150.0 + (50.0 * ((step - 6) as f32));
                         if setpoint_reached && !alarm_started {
-                            let _ = alarm.schedule(1800000000_u32.microseconds());
+                            next_stop = timer.get_counter() + 1800000000;
                             alarm_started = true;
                         }
-                        if alarm.finished() && alarm_started {
+                        if (next_stop <= timer.get_counter()) && alarm_started {
                             step += 1;
                             setpoint_reached = false;
                             alarm_started = false;
+                            next_stop = 0;
                             continue;
                         }
+                        info!(
+                            "Started {} reached {} time left (ms) {}",
+                            alarm_started,
+                            setpoint_reached,
+                            next_stop - timer.get_counter()
+                        );
                     }
                     18..=20 => {
                         info!("Step {}", step);
                         setpoint = 700.0 + (100.0 * ((step - 17) as f32));
                         if setpoint_reached && !alarm_started {
-                            let _ = alarm.schedule(1800000000_u32.microseconds());
+                            next_stop = timer.get_counter() + 1800000000;
                             alarm_started = true;
                         }
-                        if alarm.finished() && alarm_started {
+                        if (next_stop <= timer.get_counter()) && alarm_started {
                             step += 1;
                             setpoint_reached = false;
                             alarm_started = false;
+                            next_stop = 0;
                             continue;
                         }
+                        info!(
+                            "Started {} reached {} time left (ms) {}",
+                            alarm_started,
+                            setpoint_reached,
+                            next_stop - timer.get_counter()
+                        );
                     }
                     21 => {
                         info!("cooldown");
@@ -244,6 +265,98 @@ fn main() -> ! {
                         setpoint = 0.0;
                     }
                     0_u8 | 22_u8..=u8::MAX => info!("error"),
+                }*/
+                match step {
+                    1..=3 => {
+                        info!("Step {}", step);
+                        setpoint = 170.0 * (step as f32);
+                        if setpoint_reached && !alarm_started {
+                            next_stop = timer.get_counter() + 3600000000;
+                            alarm_started = true;
+                        }
+                        if (next_stop <= timer.get_counter()) && alarm_started {
+                            step += 1;
+                            setpoint_reached = false;
+                            alarm_started = false;
+                            next_stop = 0;
+                            continue;
+                        }
+                        info!(
+                            "Started {} reached {} time left (ms) {}",
+                            alarm_started,
+                            setpoint_reached,
+                            next_stop - timer.get_counter()
+                        );
+                    }
+                    4 => {
+                        info!("Step {}", step);
+                        setpoint = 660.0;
+                        if setpoint_reached && !alarm_started {
+                            next_stop = timer.get_counter() + 3600000000;
+                            alarm_started = true;
+                        }
+                        if (next_stop <= timer.get_counter()) && alarm_started {
+                            step += 1;
+                            setpoint_reached = false;
+                            alarm_started = false;
+                            next_stop = 0;
+                            continue;
+                        }
+                        info!(
+                            "Started {} reached {} time left (ms) {}",
+                            alarm_started,
+                            setpoint_reached,
+                            next_stop - timer.get_counter()
+                        );
+                    }
+                    5 => {
+                        info!("Step {}", step);
+                        setpoint = 860.0;
+                        if setpoint_reached && !alarm_started {
+                            next_stop = timer.get_counter() + 3600000000;
+                            alarm_started = true;
+                        }
+                        if (next_stop <= timer.get_counter()) && alarm_started {
+                            step += 1;
+                            setpoint_reached = false;
+                            alarm_started = false;
+                            next_stop = 0;
+                            continue;
+                        }
+                        info!(
+                            "Started {} reached {} time left (ms) {}",
+                            alarm_started,
+                            setpoint_reached,
+                            next_stop - timer.get_counter()
+                        );
+                    }
+                    6 => {
+                        info!("Step {}", step);
+                        setpoint = 1060.0;
+                        if setpoint_reached && !alarm_started {
+                            next_stop = timer.get_counter() + 1800000000;
+                            alarm_started = true;
+                        }
+                        if (next_stop <= timer.get_counter()) && alarm_started {
+                            step += 1;
+                            setpoint_reached = false;
+                            alarm_started = false;
+                            next_stop = 0;
+                            continue;
+                        }
+                        info!(
+                            "Started {} reached {} time left (ms) {}",
+                            alarm_started,
+                            setpoint_reached,
+                            next_stop - timer.get_counter()
+                        );
+                    }
+                    7 => {
+                        info!("cooldown");
+                        cooldown = true;
+                        setpoint = 0.0;
+                    }
+                    0_u8 | 7_u8..=u8::MAX => info!("error"),
                 }
             }
             led_pin.set_high().unwrap();
@@ -252,7 +365,7 @@ fn main() -> ! {
             delay.delay_ms(200);
             if thermocouple <= setpoint - 1.0 {
                 channel.set_duty(65535);
-                info!("full power");
+                //info!("full power");
                 s.write_fmt(format_args!(
                     "Step: {}\nTemp: {}\nSetpt: {}\nFull power",
                     step, thermocouple, setpoint
@@ -261,7 +374,7 @@ fn main() -> ! {
             }
             if (setpoint - 1.0..setpoint).contains(&thermocouple) {
                 channel.set_duty(32767);
-                info!("half power");
+                //info!("half power");
                 s.write_fmt(format_args!(
                     "Step: {}\nTemp: {}\nSetpt: {}\nHalf power",
                     step, thermocouple, setpoint
@@ -270,7 +383,7 @@ fn main() -> ! {
             }
             if thermocouple >= setpoint {
                 channel.set_duty(0);
-                info!("no power");
+                //info!("no power");
                 s.write_fmt(format_args!(
                     "Step: {}\nTemp: {}\nSetpt: {}\nNo power",
                     step, thermocouple, setpoint
