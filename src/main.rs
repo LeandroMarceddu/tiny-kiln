@@ -11,13 +11,11 @@ use defmt_rtt as _;
 use embedded_graphics::primitives::{PrimitiveStyleBuilder, StrokeAlignment};
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_hal::PwmPin;
-use embedded_time::fixed_point::FixedPoint;
-use embedded_time::rate::*;
+use fugit::RateExtU32;
 use heapless::String;
-
 use panic_probe as _;
 use rp2040_hal as hal;
-use rp2040_hal::clocks::Clock;
+use rp2040_hal::Clock;
 
 use rp_pico as bsp;
 
@@ -31,6 +29,7 @@ use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 const THERMOCOUPLE_BITS: RangeInclusive<usize> = 2..=15;
 use core::fmt::Write;
 #[entry]
+#[allow(unused_assignments)]
 fn main() -> ! {
     info!("Program start");
     let mut pac = pac::Peripherals::take().unwrap();
@@ -51,7 +50,7 @@ fn main() -> ! {
     .ok()
     .unwrap();
     info!("Set up clocks");
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().integer());
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
     let pins = bsp::Pins::new(
         pac.IO_BANK0,
@@ -96,7 +95,7 @@ fn main() -> ! {
         pac.I2C1,
         sda_pin,
         scl_pin, // Try `not_an_scl_pin` here
-        400_u32.kHz(),
+        400.kHz(),
         &mut pac.RESETS,
         clocks.peripheral_clock.freq(),
     );
@@ -130,7 +129,7 @@ fn main() -> ! {
     let switch = pins.gpio17.into_pull_up_input();
     //door switch in series with ^ switch via relay
     let mut program_active: bool = false;
-    let mut step: u8 = 6;
+    let mut step: u8 = 1;
     let mut setpoint: f32 = 0.0;
     let mut setpoint_reached: bool = false;
     let mut alarm_started: bool = false;
@@ -150,7 +149,7 @@ fn main() -> ! {
 
         if switch.is_high().unwrap() {
             info!("Switch NOK");
-            step = 6;
+            step = 1;
             program_active = false;
             delay.delay_ms(200);
             s.write_fmt(format_args!(
@@ -281,12 +280,7 @@ fn main() -> ! {
                             next_stop = 0;
                             continue;
                         }
-                        info!(
-                            "Started {} reached {} time left (ms) {}",
-                            alarm_started,
-                            setpoint_reached,
-                            next_stop - timer.get_counter()
-                        );
+                        info!("Started {} reached {}", alarm_started, setpoint_reached);
                     }
                     4 => {
                         info!("Step {}", step);
@@ -302,12 +296,7 @@ fn main() -> ! {
                             next_stop = 0;
                             continue;
                         }
-                        info!(
-                            "Started {} reached {} time left (ms) {}",
-                            alarm_started,
-                            setpoint_reached,
-                            next_stop - timer.get_counter()
-                        );
+                        info!("Started {} reached {}", alarm_started, setpoint_reached);
                     }
                     5 => {
                         info!("Step {}", step);
@@ -323,12 +312,7 @@ fn main() -> ! {
                             next_stop = 0;
                             continue;
                         }
-                        info!(
-                            "Started {} reached {} time left (ms) {}",
-                            alarm_started,
-                            setpoint_reached,
-                            next_stop - timer.get_counter()
-                        );
+                        info!("Started {} reached {}", alarm_started, setpoint_reached);
                     }
                     6 => {
                         info!("Step {}", step);
@@ -344,12 +328,7 @@ fn main() -> ! {
                             next_stop = 0;
                             continue;
                         }
-                        info!(
-                            "Started {} reached {} time left (ms) {}",
-                            alarm_started,
-                            setpoint_reached,
-                            next_stop - timer.get_counter()
-                        );
+                        info!("Started {} reached {}", alarm_started, setpoint_reached);
                     }
                     7 => {
                         info!("cooldown");
@@ -364,7 +343,11 @@ fn main() -> ! {
             led_pin.set_low().unwrap();
             delay.delay_ms(200);
             if thermocouple <= setpoint - 1.0 {
-                channel.set_duty(65535);
+                if setpoint < 150.0 {
+                    channel.set_duty(32767);
+                } else {
+                    channel.set_duty(65535);
+                }
                 //info!("full power");
                 s.write_fmt(format_args!(
                     "Step: {}\nTemp: {}\nSetpt: {}\nFull power",
