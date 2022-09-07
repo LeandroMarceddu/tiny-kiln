@@ -12,10 +12,10 @@ use embedded_graphics::primitives::{PrimitiveStyleBuilder, StrokeAlignment};
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_hal::PwmPin;
 use fugit::RateExtU32;
+use hal::Clock;
 use heapless::String;
 use panic_probe as _;
 use rp2040_hal as hal;
-use rp2040_hal::Clock;
 
 use rp_pico as bsp;
 
