@@ -149,7 +149,6 @@ fn main() -> ! {
 
         if switch.is_high().unwrap() {
             info!("Switch NOK");
-            step = 1;
             program_active = false;
             delay.delay_ms(200);
             s.write_fmt(format_args!(
